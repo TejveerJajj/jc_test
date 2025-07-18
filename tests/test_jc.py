@@ -1,16 +1,12 @@
 import unittest
 from unittest.mock import patch, MagicMock
 import jc
+from config import Config
 
 class TestJc(unittest.TestCase):
 
     def setUp(self):
-        # Define the variables that are missing
-        jc.STATUS_URL = "http://fake-elk-url.com/_cluster/health?pretty=true"
-        jc.ACTION_URL = "http://fake-elk-url.com/_watcher/watch/"
-        jc.REQ_HEADERS = {'content-type': 'application/json'}
-        jc.username = "testuser"
-        jc.password = "testpass"
+        self.config = Config("testuser", "testpass", "http://fake-elk-url.com/")
 
     @patch('jc.get_local_watch_id_dict')
     def test_get_local_watch_id_list(self, mock_get_local_watch_id_dict):
@@ -31,12 +27,12 @@ class TestJc(unittest.TestCase):
         mock_response = MagicMock()
         mock_response.content = '{"status": "green"}'
         mock_get.return_value = mock_response
-        jc.check_status()
+        jc.check_status(self.config)
         mock_get.assert_called()
 
     @patch('requests.put')
     def test_activate_watch(self, mock_put):
-        jc.activate_watch('test_watch')
+        jc.activate_watch(self.config, 'test_watch')
         mock_put.assert_called()
 
     @patch('requests.put')
@@ -44,7 +40,7 @@ class TestJc(unittest.TestCase):
         mock_response = MagicMock()
         mock_response.content = '{"acknowledged": true}'
         mock_put.return_value = mock_response
-        jc.deactivate_watch('test_watch')
+        jc.deactivate_watch(self.config, 'test_watch')
         mock_put.assert_called()
 
     @patch('requests.delete')
@@ -52,7 +48,7 @@ class TestJc(unittest.TestCase):
         mock_response = MagicMock()
         mock_response.content = '{"found": true}'
         mock_delete.return_value = mock_response
-        jc.delete_watch('test_watch')
+        jc.delete_watch(self.config, 'test_watch')
         mock_delete.assert_called()
 
 if __name__ == '__main__':
