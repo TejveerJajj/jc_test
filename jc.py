@@ -8,8 +8,7 @@ from os.path import isfile, join, getmtime
 import os
 import sys
 from get_file_status import *
-
-REQ_URL = "https://elkurl/.watches/_search?size=10000"
+from config import Config
 
 
 
@@ -84,110 +83,68 @@ def parse_es_to_json(target_file_dir):
         result = data_string.replace('"""','"')
     return json.loads(result)
 
-def check_status():
+def check_status(config):
     try:
-        res = requests.get(STATUS_URL,headers=REQ_HEADERS,verify ="cert/cert.cert", auth = HTTPBasicAuth(username, password))
-        # print(res.content)
-        target =res.content
+        res = requests.get(config.search_url, headers=config.req_headers, verify=config.cert_path, auth=HTTPBasicAuth(config.username, config.password))
+        res.raise_for_status()
+        target = res.content
         print(target)
-        
-    except ConnectionError:
-        print("Unable to Connect to API for watch")
-        
-    except HTTPError as exception:
-        print("HTTP Error for watch: "+ str(exception))
+    except (ConnectionError, HTTPError, RequestException) as e:
+        print(f"Error checking status: {e}")
 
-    except RequestException as exception:
-        print(exception)
-
-def get_existing_elk_watches():
+def get_existing_elk_watches(config):
     '''Return current list of project's watch id from elk'''
     try:
-        watches_folder = os.path.abspath(os.path.join(getcwd(),"watches"))
-        team_list = [team_name for team_name in os.listdir(watches_folder) if os.path.isdir(os.path.join(watches_folder, team_name))] 
-        if team_list != 0:
+        watches_folder = os.path.abspath(os.path.join(getcwd(), "watches"))
+        team_list = [team_name for team_name in os.listdir(watches_folder) if os.path.isdir(os.path.join(watches_folder, team_name))]
+        if team_list:
             for team_name in team_list:
-                team_folder = os.path.abspath(os.path.join(getcwd(),"watches", team_name))
+                team_folder = os.path.abspath(os.path.join(getcwd(), "watches", team_name))
                 project_list = [project for project in os.listdir(team_folder) if os.path.isdir(os.path.join(team_folder, project))]
-                if len(project_list) != 0:
+                if project_list:
                     for project_name in project_list:
-                        res = requests.get(SEARCH_URL,headers=REQ_HEADERS,verify ="cert/cert.cert", auth = HTTPBasicAuth(username, password))
-                        if res.status_code != 200:
-                            raise ConnectionError
+                        res = requests.get(config.search_url, headers=config.req_headers, verify=config.cert_path, auth=HTTPBasicAuth(config.username, config.password))
+                        res.raise_for_status()
                         target = res.content
-                        final_target = str(target).replace(" ","").replace("\n","")
-                        id_list = re.findall(r'\"_id\"\:"(.*?)"',final_target)
-                        required_id_list = []
-                        for id in id_list:
-                            if re.search(rf'.*{team_name}.*{project_name}.*',id, re.IGNORECASE):
-                                required_id_list.append(id)
+                        final_target = str(target).replace(" ", "").replace("\n", "")
+                        id_list = re.findall(r'\"_id\"\:"(.*?)"', final_target)
+                        required_id_list = [id for id in id_list if re.search(rf'.*{team_name}.*{project_name}.*', id, re.IGNORECASE)]
                         return required_id_list
-    
-    except ConnectionError:
-        print("Unable to Connect to API for watch")
-        
-    except HTTPError as exception:
-        print("HTTP Error for watch: "+ str(exception))
+    except (ConnectionError, HTTPError, RequestException) as e:
+        print(f"Error getting existing ELK watches: {e}")
 
-    except RequestException as exception:
-        print(exception)
-
-def activate_watch(watch_id):
+def activate_watch(config, watch_id):
     '''Enable watch'''
     try:
-        res = requests.put(ACTION_URL + watch_id +"/_activate", headers=REQ_HEADERS,verify ="cert/cert.cert", auth = HTTPBasicAuth(username, password))
-        target =res.content
+        res = requests.put(f"{config.action_url}{watch_id}/_activate", headers=config.req_headers, verify=config.cert_path, auth=HTTPBasicAuth(config.username, config.password))
+        res.raise_for_status()
+        target = res.content
         print(target)
-        
-    except ConnectionError:
-        print("Unable to Connect to API for watch")
-        
-    except HTTPError as exception:
-        print("HTTP Error for watch: "+ str(exception))
+    except (ConnectionError, HTTPError, RequestException) as e:
+        print(f"Error activating watch {watch_id}: {e}")
 
-    except RequestException as exception:
-        print(exception)
-        
-def deactivate_watch(watch_id) :
+def deactivate_watch(config, watch_id):
     '''Disable watch'''
     try:
-        res = requests.put(ACTION_URL + watch_id +"/_deactivate", headers=REQ_HEADERS,verify ="cert/cert.cert", auth = HTTPBasicAuth(username, password))
+        res = requests.put(f"{config.action_url}{watch_id}/_deactivate", headers=config.req_headers, verify=config.cert_path, auth=HTTPBasicAuth(config.username, config.password))
+        res.raise_for_status()
         target = res.content
         json_target = json.loads(target)
         print(json_target)
-        # if json_target["status"]["state"]["active"]:
-        #     print("Watch with id {} id is activated\n".format(watch_id))
-        # else:
-        #     print("Watch with id {} id is deactivated\n".format(watch_id))
-    except ConnectionError:
-        print("Unable to Connect to API for watch")
-        
-    except HTTPError as exception:
-        print("HTTP Error for watch: "+ str(exception))
+    except (ConnectionError, HTTPError, RequestException) as e:
+        print(f"Error deactivating watch {watch_id}: {e}")
 
-    except RequestException as exception:
-        print(exception)
-        
-def delete_watch(watch_id):
+def delete_watch(config, watch_id):
     '''Delete watch'''
     try:
         print(watch_id)
-        res = requests.delete(ACTION_URL + watch_id, headers=REQ_HEADERS,verify ="cert/cert.cert", auth = HTTPBasicAuth(username, password))
-        target =res.content
+        res = requests.delete(f"{config.action_url}{watch_id}", headers=config.req_headers, verify=config.cert_path, auth=HTTPBasicAuth(config.username, config.password))
+        res.raise_for_status()
+        target = res.content
         json_target = json.loads(target)
         print(json_target)
-        # if json_target["found"]:
-        #     print("Deleted watch with id {} succesfully\n".format(watch_id))
-        # else:
-        #     print("Could not find watch with id {}\n".format(watch_id))
-    except ConnectionError:
-        print("Unable to Connect to API for watch")
-        
-    except HTTPError as exception:
-        print("HTTP Error for watch: "+ str(exception))
-
-    except RequestException as exception:
-        print(exception)
+    except (ConnectionError, HTTPError, RequestException) as e:
+        print(f"Error deleting watch {watch_id}: {e}")
  
 def delete_unused_watches():
     for elk_watch in get_existing_elk_watches():
@@ -201,89 +158,66 @@ def create_missing_watches():
             print("Found missing watch with id:{}".format(local_watch))
             # create_or_update_watch(local_watch)
             
-def create_or_update_watch(watch_id, data):
+def create_or_update_watch(config, watch_id, data):
     try:
-        res = requests.put(ACTION_URL + watch_id, data = json.dumps(data), headers=REQ_HEADERS,verify ="cert/cert.cert", auth = HTTPBasicAuth(username, password))
-        target =res.content
+        res = requests.put(f"{config.action_url}{watch_id}", data=json.dumps(data), headers=config.req_headers, verify=config.cert_path, auth=HTTPBasicAuth(config.username, config.password))
+        res.raise_for_status()
+        target = res.content
         json_target = json.loads(target)
         print(json_target)
-        # if json_target["created"]:
-        #     print("Created watch with id {} succesfully\n".format(watch_id))
-        # else:
-        #     print("Updated watch with id {}\n".format(watch_id))
-    except ConnectionError:
-        print("Unable to Connect to API for watch")
-        
-    except HTTPError as exception:
-        print("HTTP Error for watch: "+ str(exception))
+    except (ConnectionError, HTTPError, RequestException) as e:
+        print(f"Error creating or updating watch {watch_id}: {e}")
 
-    except RequestException as exception:
-        print(exception)
-
-def deactivate_watches_from_list(target_list):
-    if len(target_list) != 0:
+def deactivate_watches_from_list(config, target_list):
+    if target_list:
         for watch in target_list:
-            # print("Deactivating watch :", str(watch))
-            deactivate_watch(watch)
-    
-def delete_watches_from_list(target_list):
-    if len(target_list) != 0:
-        for watch in target_list:
-            # print("Deteting watch :", str(watch))
-            delete_watch(watch)
+            deactivate_watch(config, watch)
 
-def create_watches_from_list(target_list):    
+def delete_watches_from_list(config, target_list):
+    if target_list:
+        for watch in target_list:
+            delete_watch(config, watch)
+
+def create_watches_from_list(config, target_list):
     local_watch_dict = get_local_watch_id_dict()
-    # existing_watchs = get_existing_project_watchs()
-    if len(target_list) != 0:
+    if target_list:
         for watch in target_list:
             watch_dir = local_watch_dict[watch]
             watch_data = parse_es_to_json(watch_dir)
-            # print("Creating watch :", str(watch))
-            create_or_update_watch(watch, watch_data)
-        
-def update_watches_from_list(target_list):
-    # repo_watch_dict = get_local_watch_id_dict(team_name)
-    # existing_watchs = get_existing_project_watchs()
-    # for watch in target_list:
-    #     if watch not in existing_watchs:
-    #         watch_dir = repo_watch_dict[watch]
-    #         watch_data = parse_es_to_json(watch_dir)
-    #         create_or_update_watch(watch, watch_data)
-    
+            create_or_update_watch(config, watch, watch_data)
+
+def update_watches_from_list(config, target_list):
     local_watch_dict = get_local_watch_id_dict()
-    # existing_watchs = get_existing_project_watchs()
-    if len(target_list) != 0:
+    if target_list:
         for watch in target_list:
             watch_dir = local_watch_dict[watch]
             watch_data = parse_es_to_json(watch_dir)
-            # print("Updating watch :", str(watch))
-            create_or_update_watch(watch, watch_data)
-# def main(argv):
-    
-if __name__ == '__main__':
+            create_or_update_watch(config, watch, watch_data)
+
+def main():
+    if len(sys.argv) != 4:
+        print("Usage: python jc.py <username> <password> <base_url>")
+        sys.exit(1)
+
     username = sys.argv[1]
     password = sys.argv[2]
-    BASE_URL = sys.argv[3].encode().decode('unicode_escape')
-    # STATUS_URL = BASE_URL + "_cluster/health?pretty=true"
-    SEARCH_URL = BASE_URL + ".watches/_search?size=10000"
+    base_url = sys.argv[3].encode().decode('unicode_escape')
 
-    ACTION_URL = BASE_URL + "_watcher/watch/"
+    config = Config(username, password, base_url)
 
-    REQ_HEADERS = {'content-type': 'application/json'}
-    file_status_dir = os.path.abspath(os.path.join(getcwd(),"file_status_log"))
+    file_status_dir = os.path.abspath(os.path.join(getcwd(), "file_status_log"))
     get_file_status(file_status_dir)
+
     print("watches to be created:\n", watches_to_be_created)
     print("watches to be deleted:\n", watches_to_be_deleted)
     print("watches to be updated:\n", watches_to_be_updated)
     print("watches to be disabled:\n", watches_to_be_disabled)
     print("watch list\n", watch_list)
-    create_watches_from_list(watches_to_be_created)
-    update_watches_from_list(watches_to_be_updated)
-    delete_watches_from_list(watches_to_be_deleted)
-    deactivate_watches_from_list(watches_to_be_disabled)
-    # print("Existing watch in elk")
-    # print(get_existing_elk_watches())
-    # create_missing_watches()
-    # delete_unused_watches()
-    # os.remove(file_status_dir)
+
+    create_watches_from_list(config, watches_to_be_created)
+    update_watches_from_list(config, watches_to_be_updated)
+    delete_watches_from_list(config, watches_to_be_deleted)
+    deactivate_watches_from_list(config, watches_to_be_disabled)
+
+if __name__ == '__main__':
+    main()
